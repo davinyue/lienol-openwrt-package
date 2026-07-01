@@ -8,6 +8,27 @@ function get_config(){
 	done
 }
 
+
+# 获取已安装软件包版本号，兼容 opkg / apk
+function get_pkg_version(){
+	local pkg="$1"
+	local version
+	if command -v opkg >/dev/null 2>&1; then
+		version="$(opkg list-installed 2>/dev/null | awk -v p="$pkg" '$1 == p {print $3; exit}')"
+	fi
+	if [ -z "$version" ] && command -v apk >/dev/null 2>&1; then
+		version="$(apk list -I "$pkg" 2>/dev/null | awk -v p="$pkg" '
+			$1 ~ "^" p "-" {
+				v=$1
+				sub("^" p "-", "", v)
+				print v
+				exit
+			}
+		')"
+	fi
+	printf '%s\n' "$version"
+}
+
 # 初始化设置信息
 function read_config(){
 	get_config "pushbot_enable" "lite_enable" "device_name" "sleeptime" "oui_dir" "oui_data" "reset_regularly" "debuglevel" "device_aliases" \
@@ -21,7 +42,9 @@ function read_config(){
 	"jsonpath" "dd_webhook" "we_webhook" "pp_token" "pp_channel" "pp_webhook" "pp_topic_enable" "pp_topic" "fs_webhook" "pushdeer_key" "pushdeer_srv_enable" "pushdeer_srv" "bark_srv_enable" "bark_srv" "bark_token" "bark_sound" "bark_icon" "bark_icon_enable" "bark_level"
 	
 	for str_version in "wrtbwmon" "iputils-arping" "curl" "iw"; do
-		eval `echo ${str_version:0:2}"_version"`=`opkg list-installed|grep -w ^${str_version}|awk '{print $3}'` 2>/dev/null
+		version_name="$(printf '%s' "$str_version" | cut -c1-2)_version"
+		version_value="$(get_pkg_version "$str_version")"
+		eval "${version_name}=\"${version_value}\"" 2>/dev/null
 	done
 	dir="/tmp/pushbot/" && mkdir -p ${dir}
 	tempjsonpath="/tmp/pushbot/temp.json"
