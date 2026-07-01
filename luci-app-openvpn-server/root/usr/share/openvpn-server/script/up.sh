@@ -1,5 +1,8 @@
 #!/bin/sh
 
+CONFIG="luci-app-openvpn-server"
+masquerade=$(uci -q get ${CONFIG}.server.masquerade || echo "1")
+
 uci -q batch <<-EOF >/dev/null
 	delete network.ovpn_server
 	set network.ovpn_server=interface
@@ -11,6 +14,7 @@ uci -q batch <<-EOF >/dev/null
 	commit network
 	
 	set firewall.ovpn_server.network="ovpn_server"
+	set firewall.ovpn_server.masq="${masquerade}"
 	commit firewall
 EOF
 

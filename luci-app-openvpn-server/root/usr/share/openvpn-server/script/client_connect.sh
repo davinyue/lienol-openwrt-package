@@ -36,6 +36,22 @@ cfgid=$(uci show ${CONFIG} | grep "@users" | grep "\.username='${common_name}'" 
 		done
 		#echo "${TIME}: ${common_name}/${REMOTE_IP} add route." >> ${LOG_FILE}
 	}
+	allow_lan=$(uci -q get ${CONFIG}.${cfgid}.allow_lan)
+	[ "${allow_lan}" = "0" ] && [ -n "${ifconfig_pool_remote_ip}" ] && {
+		lan_ip=$(uci -q get network.lan.ipaddr)
+		lan_mask=$(uci -q get network.lan.netmask)
+		[ -n "${lan_ip}" ] && [ -n "${lan_mask}" ] && {
+			eval "$(ipcalc.sh ${lan_ip} ${lan_mask})"
+			iptables -w -I forwarding_rule -s ${ifconfig_pool_remote_ip} -d ${NETWORK}/${PREFIX} -m comment --comment "openvpn-server-user-${common_name}" -j REJECT 2>/dev/null
+		}
+	}
+	download_limit=$(uci -q get ${CONFIG}.${cfgid}.download_limit)
+	upload_limit=$(uci -q get ${CONFIG}.${cfgid}.upload_limit)
+	config_file="${client_connect_config_file:-$1}"
+	[ -n "${config_file}" ] && {
+		[ -n "${download_limit}" ] && echo "shaper ${download_limit}" >> "${config_file}"
+		[ -n "${upload_limit}" ] && echo "push \"shaper ${upload_limit}\"" >> "${config_file}"
+	}
 }
 
 #可根据登录的账号自定义脚本，如组网、日志、限速、权限等特殊待遇。

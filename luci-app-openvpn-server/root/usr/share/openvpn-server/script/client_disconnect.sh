@@ -22,6 +22,9 @@ cfgid=$(uci show ${CONFIG} | grep "@users" | grep "\.username='${common_name}'" 
 		done
 		#echo "${TIME}: ${common_name}/${REMOTE_IP} del route." >> ${LOG_FILE}
 	}
+	iptables -w -S forwarding_rule 2>/dev/null | grep "openvpn-server-user-${common_name}" | while read rule; do
+		iptables -w $(echo "${rule}" | sed 's/^-A/-D/') 2>/dev/null
+	done
 }
 
 #可根据退出的账号自定义脚本，如静态路由表，组网等。
