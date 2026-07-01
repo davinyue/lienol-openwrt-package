@@ -4,17 +4,15 @@ START=99
 STOP=10
 
 start() {
-	state=`pgrep -f "/usr/bin/pushbot/pushbot"`
-	if [ ! -z "$state" ]; then
-		restart
-	else
-		/usr/bin/pushbot/pushbot &
-	fi
+	state="$(pgrep -f "/usr/bin/pushbot/pushbot")"
+	[ -n "$state" ] && return 0
+	/usr/bin/pushbot/pushbot >/dev/null 2>&1 &
 	echo "pushbot is starting now ..."
 }
 
 stop() {
-	kill -9 `pgrep -f "/usr/bin/pushbot/pushbot"` 2>/dev/null
+	state="$(pgrep -f "/usr/bin/pushbot/pushbot")"
+	[ -n "$state" ] && kill -9 $state 2>/dev/null
 	echo "pushbot exit ..."
 }
 
