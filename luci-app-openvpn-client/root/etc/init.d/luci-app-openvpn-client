@@ -101,6 +101,8 @@ start_instance() {
 	local c_allow_access_action="ACCEPT"
 	local c_allow_access=$(uci -q get ${CONFIG}.${cfgid}.allow_access || echo "1")
 	[ "${c_allow_access}" = "0" ] && c_allow_access_action="DROP"
+	local c_allow_access_nft="accept"
+	[ "${c_allow_access_action}" = "DROP" ] && c_allow_access_nft="drop"
 	
 	echo "#!/bin/sh" > ${TMP_OVPN_PATH}/${cfgid}/up.sh
 	echo "#!/bin/sh" > ${TMP_OVPN_PATH}/${cfgid}/down.sh
@@ -129,15 +131,33 @@ start_instance() {
 	cat <<-EOF >> ${TMP_OVPN_PATH}/${cfgid}/iptables_add.sh
 		${TMP_OVPN_PATH}/${cfgid}/iptables_del.sh
 		#允许服务端配置静态路由表访问内网
-		iptables -w -t nat -I postrouting_rule -s \$(cat ${TMP_OVPN_PATH}/${cfgid}/network)/\$(cat ${TMP_OVPN_PATH}/${cfgid}/mask) -m comment --comment "${c_dev}" -j MASQUERADE
-		iptables -w -t nat -I postrouting_rule -o ${c_dev} -m comment --comment "${c_dev}" -j MASQUERADE
-		iptables -w -I input_rule -s \$(cat ${TMP_OVPN_PATH}/${cfgid}/network)/\$(cat ${TMP_OVPN_PATH}/${cfgid}/mask) -m comment --comment "${c_dev}" -j ${c_allow_access_action}
-		iptables -w -I forwarding_rule -i ${c_dev} -m comment --comment "${c_dev}" -j ACCEPT
-		iptables -w -I forwarding_rule -o ${c_dev} -m comment --comment "${c_dev}" -j ACCEPT
+		ipt_chain_exists() {
+			\$1 -nL "\$2" >/dev/null 2>&1
+		}
+		if ipt_chain_exists "iptables -w -t nat" "postrouting_rule"; then
+			iptables -w -t nat -I postrouting_rule -s \$(cat ${TMP_OVPN_PATH}/${cfgid}/network)/\$(cat ${TMP_OVPN_PATH}/${cfgid}/mask) -m comment --comment "${c_dev}" -j MASQUERADE
+			iptables -w -t nat -I postrouting_rule -o ${c_dev} -m comment --comment "${c_dev}" -j MASQUERADE
+		fi
+		if ipt_chain_exists "iptables -w" "input_rule"; then
+			iptables -w -I input_rule -s \$(cat ${TMP_OVPN_PATH}/${cfgid}/network)/\$(cat ${TMP_OVPN_PATH}/${cfgid}/mask) -m comment --comment "${c_dev}" -j ${c_allow_access_action}
+		fi
+		if ipt_chain_exists "iptables -w" "forwarding_rule"; then
+			iptables -w -I forwarding_rule -i ${c_dev} -m comment --comment "${c_dev}" -j ACCEPT
+			iptables -w -I forwarding_rule -o ${c_dev} -m comment --comment "${c_dev}" -j ACCEPT
+		fi
+		if command -v nft >/dev/null 2>&1 && nft list table inet fw4 >/dev/null 2>&1; then
+			net="\$(cat ${TMP_OVPN_PATH}/${cfgid}/network)/\$(cat ${TMP_OVPN_PATH}/${cfgid}/mask)"
+			nft insert rule inet fw4 srcnat ip saddr "\${net}" counter masquerade comment "${c_dev}" 2>/dev/null
+			nft insert rule inet fw4 srcnat oifname "${c_dev}" counter masquerade comment "${c_dev}" 2>/dev/null
+			nft insert rule inet fw4 input ip saddr "\${net}" counter ${c_allow_access_nft} comment "${c_dev}" 2>/dev/null
+			nft insert rule inet fw4 forward iifname "${c_dev}" counter accept comment "${c_dev}" 2>/dev/null
+			nft insert rule inet fw4 forward oifname "${c_dev}" counter accept comment "${c_dev}" 2>/dev/null
+		fi
 	EOF
 	
 	cat <<-EOF >> ${TMP_OVPN_PATH}/${cfgid}/iptables_del.sh
 		ipt_del() {
+			\$1 -nL \$2 >/dev/null 2>&1 || return 0
 			for i in \$(seq 1 \$(\$1 -nL \$2 | grep -c "${c_dev}")); do
 				local index=\$(\$1 --line-number -nL \$2 | grep "${c_dev}" | head -1 | awk '{print \$1}')
 				\$1 -w -D \$2 \$index 2>/dev/null
@@ -146,10 +166,21 @@ start_instance() {
 		ipt_del "iptables -w" "input_rule"
 		ipt_del "iptables -w" "forwarding_rule"
 		ipt_del "iptables -w -t nat" "postrouting_rule"
+		nft_del() {
+			command -v nft >/dev/null 2>&1 || return 0
+			nft list chain inet fw4 "\$1" -a >/dev/null 2>&1 || return 0
+			nft list chain inet fw4 "\$1" -a | grep 'comment "${c_dev}"' | awk '{print \$NF}' | while read handle; do
+				[ -n "\${handle}" ] && nft delete rule inet fw4 "\$1" handle "\${handle}" 2>/dev/null
+			done
+		}
+		nft_del input
+		nft_del forward
+		nft_del srcnat
 	EOF
 	
 	cat <<-EOF >> ${TMP_OVPN_PATH}/${cfgid}/ipchange.sh
 		[ -s "${TMP_OVPN_PATH}/${cfgid}/ip" ] && ${TMP_OVPN_PATH}/${cfgid}/iptables_add.sh
+		exit 0
 	EOF
 	
 	cat <<-EOF >> ${TMP_OVPN_PATH}/${cfgid}/tls-verify.sh
@@ -178,6 +209,8 @@ start_instance() {
 			fi
 		done
 	}
+	echo "exit 0" >> ${TMP_OVPN_PATH}/${cfgid}/iptables_add.sh
+	echo "exit 0" >> ${TMP_OVPN_PATH}/${cfgid}/iptables_del.sh
 	
 	chmod 0755 ${TMP_OVPN_PATH}/${cfgid}/*.sh
 	
