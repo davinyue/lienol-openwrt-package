@@ -5,8 +5,6 @@ CONFIG="luci-app-openvpn-server"
 port=$(uci -q get ${CONFIG}.server.port || echo "1194")
 proto=$(uci -q get ${CONFIG}.server.proto || echo "udp")
 ddns=$(uci -q get ${CONFIG}.server.ddns || echo "example.com")
-lzo=$(uci -q get ${CONFIG}.server.client_lzo)
-[ -n "${lzo}" ] || lzo=$(uci -q get ${CONFIG}.server.lzo || echo "1")
 cipher=$(uci -q get ${CONFIG}.server.cipher || echo "AES-256-GCM")
 auth=$(uci -q get ${CONFIG}.server.auth || echo "SHA256")
 tls_crypt=$(uci -q get ${CONFIG}.server.tls_crypt || echo "0")
@@ -30,7 +28,6 @@ cat <<-EOF > /tmp/openvpn.ovpn
 	persist-key
 	persist-tun
 	auth-user-pass
-	$([ "${lzo}" -eq 1 ] && echo "comp-lzo")
 	$([ "${cipher}" != "none" ] && echo "data-ciphers ${cipher}:AES-256-GCM:AES-128-GCM")
 	$([ "${cipher}" != "none" ] && echo "cipher ${cipher}")
 	$([ "${auth}" != "none" ] && echo "auth ${auth}")

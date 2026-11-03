@@ -84,8 +84,6 @@ gen_include() {
 start_service() {
 	local enabled=$(uci -q get ${CONFIG}.server.enabled)
 	[ "${enabled}" -eq 1 ] || return 1
-	local lzo=$(uci -q get ${CONFIG}.server.lzo)
-	[ "${lzo}" -eq 1 ] && lzo_conf="comp-lzo"
 	local auth_method=$(uci -q get ${CONFIG}.server.auth_method || echo "password")
 	local cipher=$(uci -q get ${CONFIG}.server.cipher || echo "AES-256-GCM")
 	local auth=$(uci -q get ${CONFIG}.server.auth || echo "SHA256")
@@ -207,7 +205,6 @@ push \"route ${IP} ${NETMASK}\""
 		up ${SCRIPT_PATH}/up.sh
 		down ${SCRIPT_PATH}/down.sh
 		keepalive ${keepalive_interval} ${keepalive_timeout}
-		${lzo_conf}
 		persist-key
 		persist-tun
 		script-security 3

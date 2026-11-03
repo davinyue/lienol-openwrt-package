@@ -66,10 +66,6 @@ o.placeholder = translate("Unlimited")
 o.datatype = "uinteger"
 o.rmempty = true
 
-o = s:taboption("general", Flag, "lzo", translate("LZO compression"))
-o.default = "1"
-o.rmempty = false
-
 o = s:taboption("network", Value, "ip_segment", translate("IP segment"))
 o.datatype = "ipaddr"
 o.placeholder = "172.30.1.0"
@@ -170,10 +166,6 @@ o = s:taboption("client", Value, "ovpn_name", translate("Client config file name
 o.default = "openvpn"
 o.placeholder = "openvpn"
 o.datatype = "string"
-o.rmempty = false
-
-o = s:taboption("client", Flag, "client_lzo", translate("Client LZO compression"))
-o.default = "1"
 o.rmempty = false
 
 o = s:taboption("client", TextValue, "extra_client_config", translate("Extra client config"))
